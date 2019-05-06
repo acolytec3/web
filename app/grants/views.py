@@ -615,6 +615,43 @@ def profile(request):
 
     return TemplateResponse(request, 'grants/profile/index.html', params)
 
+@login_required
+def invoice(request):
+    """invoice view.
+
+    Args:
+        pk (int): The primary key of the grant being invoiced.
+
+    Raises:
+        Http404: The exception is raised if no associated grant is found.
+
+    Returns:
+        TemplateResponse: The invoice view.
+
+    """
+    bounty = handle_bounty_views(request)
+
+    # only allow invoice viewing if admin or iff bounty funder
+    is_funder = bounty.is_funder(request.user.username)
+    is_staff = request.user.is_staff
+    has_view_privs = is_funder or is_staff
+    if not has_view_privs:
+        raise Http404
+
+    params = get_context(
+        ref_object=bounty,
+        user=request.user if request.user.is_authenticated else None,
+        confirm_time_minutes_target=confirm_time_minutes_target,
+        active='invoice_view',
+        title=_('Invoice'),
+    )
+    params['accepted_fulfillments'] = bounty.fulfillments.filter(accepted=True)
+    params['tips'] = [
+        tip for tip in bounty.tips.send_happy_path() if ((tip.username == request.user.username and tip.username) or (tip.from_username == request.user.username and tip.from_username) or request.user.is_staff)
+    ]
+    params['total'] = bounty._val_usd_db if params['accepted_fulfillments'] else 0
+ 
+    return TemplateResponse(request, 'grants/invoice.html', params)
 
 def quickstart(request):
     """Display quickstart guide."""
